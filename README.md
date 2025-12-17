@@ -1,12 +1,8 @@
 # FMTUNet
-# FMTUNet: A High-Fidelity Synergistic Mamba-Transformer Framework for Remote Sensing Segmentation
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Framework: PyTorch](https://img.shields.io/badge/Framework-PyTorch-orange.svg)](https://pytorch.org/)
 [![Task: Land Cover Classification](https://img.shields.io/badge/Task-Land%20Cover%20Classification-green.svg)](https://github.com/topics/remote-sensing)
-
-Official PyTorch implementation of **FMTUNet**, as described in the paper submitted to *Computers & Geosciences*:  
-**"FMTUNet: A High-Fidelity Synergistic Mamba-Transformer Framework for Complex Remote Sensing Semantic Segmentation"**.
 
 ---
 
