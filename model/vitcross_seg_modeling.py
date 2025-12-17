@@ -1053,30 +1053,11 @@ class VisionTransformer(nn.Module):
             print('Load pretrained done.')
 
 CONFIGS = {
-    'ViT-B_16': configs.get_b16_config(),
-    'ViT-B_32': configs.get_b32_config(),
-    'ViT-L_16': configs.get_l16_config(),
-    'ViT-L_32': configs.get_l32_config(),
-    'ViT-H_14': configs.get_h14_config(),
     'R50-ViT-B_16': configs.get_r50_b16_config(),
-    'R50-ViT-L_16': configs.get_r50_l16_config(),
     'testing': configs.get_testing(),
 }
 
-def create_msaa_model(config_name='R50-ViT-B_16', img_size=224, num_classes=6, skip_deep_fusion=False, use_basic_skip=False):
-    """
-    创建集成MSAA门控机制的TransUNet模型
-    
-    Args:
-        config_name: 配置名称，默认'R50-ViT-B_16'
-        img_size: 输入图像尺寸，默认224
-        num_classes: 分类数量，默认6
-        skip_deep_fusion: 是否跳过深层融合，默认False
-        use_basic_skip: 是否使用基础跳跃连接，默认False
-    
-    Returns:
-        VisionTransformer: 集成MSAA门控的模型
-    """
+def create_model(config_name='R50-ViT-B_16', img_size=224, num_classes=6, skip_deep_fusion=False, use_basic_skip=False):
     config = CONFIGS[config_name]
     config.n_classes = num_classes
     
@@ -1090,32 +1071,3 @@ def create_msaa_model(config_name='R50-ViT-B_16', img_size=224, num_classes=6, s
     )
     
     return model
-
-# 便捷函数：创建禁用深层融合的模型
-def create_shallow_fusion_model(config_name='R50-ViT-B_16', img_size=224, num_classes=6, use_basic_skip=False):
-    """
-    创建只使用浅层融合的TransUNet模型
-    
-    Args:
-        config_name: 配置名称，默认'R50-ViT-B_16'
-        img_size: 输入图像尺寸，默认224
-        num_classes: 分类数量，默认6
-        use_basic_skip: 是否使用基础跳跃连接，默认False
-    
-    Returns:
-        VisionTransformer: 禁用深层融合的模型
-    """
-    config = CONFIGS[config_name]
-    config['n_classes'] = num_classes
-    
-    model = VisionTransformer(
-        config=config,
-        img_size=img_size,
-        num_classes=num_classes,
-        skip_deep_fusion=True,  # 禁用深层融合
-        use_basic_skip=use_basic_skip
-    )
-    
-    return model
-
-
