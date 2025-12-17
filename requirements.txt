@@ -1,0 +1,25 @@
+# --- Core Scientific Stack ---
+numpy==1.26.3
+scipy==1.15.3
+scikit-learn==1.6.1
+scikit-image==0.25.2
+matplotlib==3.10.3
+
+# --- Image Processing ---
+pillow==10.2.0
+imageio==2.37.0
+tifffile==2025.3.30
+
+# --- Deep Learning Helper ---
+tqdm==4.66.5
+einops==0.8.0
+monai==1.4.0
+timm==1.0.15
+transformers==4.42.3
+ml_collections==1.1.0
+
+# --- Configuration & System ---
+PyYAML==6.0.2
+ninja==1.11.1.1
+packaging==24.1
+filelock==3.13.1
