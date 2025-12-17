@@ -48,28 +48,23 @@ ACT2FN = {"gelu": torch.nn.functional.gelu, "relu": torch.nn.functional.relu, "s
 
 
 class SpatialAttentionModule(nn.Module):
-    """空间注意力模块"""
     def __init__(self, kernel_size=7):
         super(SpatialAttentionModule, self).__init__()
         self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=kernel_size//2, bias=False)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        # 结合最大值和平均值池化生成空间响应图
         avg_out = torch.mean(x, dim=1, keepdim=True)
         max_out, _ = torch.max(x, dim=1, keepdim=True)
         x = torch.cat([avg_out, max_out], dim=1)
-        # 经七乘七卷积与Sigmoid激活产生空间权重图
         x = self.conv1(x)
         return self.sigmoid(x)
 
 class ChannelAttentionModule(nn.Module):
-    """通道注意力模块"""
     def __init__(self, in_channels, reduction=4):
         super(ChannelAttentionModule, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.max_pool = nn.AdaptiveMaxPool2d(1)
-        # 多层感知机或一乘一卷积生成通道权重向量
         self.fc = nn.Sequential(
             nn.Conv2d(in_channels, in_channels // reduction, 1, bias=False),
             nn.ReLU(inplace=True),
@@ -78,117 +73,82 @@ class ChannelAttentionModule(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        # 全局平均池化和最大池化压缩上下文
         avg_out = self.fc(self.avg_pool(x))
         max_out = self.fc(self.max_pool(x))
         out = avg_out + max_out
-        # 经Sigmoid激活后逐通道加权突出任务相关特征维度
         return self.sigmoid(out)
 
 class FusionConv(nn.Module):
-    """融合卷积模块，实现多尺度特征融合"""
     def __init__(self, in_channels, out_channels, factor=4.0):
         super(FusionConv, self).__init__()
         dim = int(out_channels // factor)
-        # 一乘一卷积压缩通道降低复杂度
         self.down = nn.Conv2d(in_channels, dim, kernel_size=1, stride=1)
-        # 三组不同尺度的深度可分离卷积并行提取多感受野空间上下文
+        
         self.conv_3x3 = nn.Conv2d(dim, dim, kernel_size=3, stride=1, padding=1)
         self.conv_5x5 = nn.Conv2d(dim, dim, kernel_size=5, stride=1, padding=2)
         self.conv_7x7 = nn.Conv2d(dim, dim, kernel_size=7, stride=1, padding=3)
-        # 空间注意力和通道注意力模块
+
         self.spatial_attention = SpatialAttentionModule()
         self.channel_attention = ChannelAttentionModule(dim)
         self.up = nn.Conv2d(dim, out_channels, kernel_size=1, stride=1)
 
     def forward(self, x1, x2, x3):
-        # 拼接三个输入特征
         x_fused = torch.cat([x1, x2, x3], dim=1)
         x_fused = self.down(x_fused)
-        
-        # 通道路径：逐通道加权突出任务相关特征维度
+
         x_fused_c = x_fused * self.channel_attention(x_fused)
-        
-        # 空间路径：多尺度卷积提取空间上下文
+
         x_3x3 = self.conv_3x3(x_fused)
         x_5x5 = self.conv_5x5(x_fused)
         x_7x7 = self.conv_7x7(x_fused)
         x_fused_s = x_3x3 + x_5x5 + x_7x7
-        # 逐元素加权强调关键区域如物体边缘
+
         x_fused_s = x_fused_s * self.spatial_attention(x_fused_s)
 
-        # 双路特征融合：将聚焦位置的空间精炼特征与聚焦内容的通道精炼特征合并
         x_out = self.up(x_fused_s + x_fused_c)
         return x_out
 
 class MSAA(nn.Module):
-    """多尺度自适应注意力模块，通过融合相邻三层编码器特征整合细节与语义信息"""
     def __init__(self, in_channels, out_channels):
         super(MSAA, self).__init__()
         self.fusion_conv = FusionConv(in_channels, out_channels)
 
     def forward(self, x1, x2, x3):
-        """
-        Args:
-            x1: 当前层特征
-            x2: 低层特征（传递语义信息）
-            x4: 高层特征（传递边缘问题特征补充）
-        """
         x_fused = self.fusion_conv(x1, x2, x3)
         return x_fused
 
 class CMUNetSkipConnection(nn.Module):
-    """CM-UNet风格的跳跃连接模块"""
     def __init__(self, skip_channels, decoder_channels):
         super(CMUNetSkipConnection, self).__init__()
         self.skip_channels = skip_channels
         self.decoder_channels = decoder_channels
         
-        # 只为前三层创建MSAA模块（浅层融合）
         self.msaa_modules = nn.ModuleList()
         for i in range(min(3, len(skip_channels))):
-            # 三个浅层特征拼接后的通道数
-            # 使用 x1, x2, x3
             in_channels = skip_channels[0] + skip_channels[1] + skip_channels[2]
-            
-            # 修复：输出通道数改为原始跳跃连接的通道数
+
             self.msaa_modules.append(
                 MSAA(in_channels, skip_channels[i])  # 改为skip_channels[i]
             )
 
     def forward(self, skip_features):
-        """
-        Args:
-            skip_features: 来自编码器的跳跃连接特征列表 [x1, x2, x3, x4]
-        Returns:
-            processed_features: 经过MSAA处理的特征列表
-        """
         processed_features = []
-        
-        # 确保至少有3个特征用于浅层融合
         if len(skip_features) < 3:
-            # 如果特征数量不足，直接返回原特征
             return skip_features
-        
-        # 提取前三个浅层特征
+
         x1, x2, x3 = skip_features[0], skip_features[1], skip_features[2]
-        
-        # 对每一层进行处理
+
         for i in range(len(skip_features)):
-            if i < 3:  # 前三层使用MSAA处理
-                # 获取当前层的目标尺寸
+            if i < 3:  
                 target_size = skip_features[i].shape[2:]
-                
-                # 将三个特征调整到相同尺寸
+
                 x1_resized = F.interpolate(x1, size=target_size, mode='bilinear', align_corners=False) if x1.shape[2:] != target_size else x1
                 x2_resized = F.interpolate(x2, size=target_size, mode='bilinear', align_corners=False) if x2.shape[2:] != target_size else x2
                 x3_resized = F.interpolate(x3, size=target_size, mode='bilinear', align_corners=False) if x3.shape[2:] != target_size else x3
-                
-                # 使用MSAA模块处理三个特征
+
                 processed_feature = self.msaa_modules[i](x1_resized, x2_resized, x3_resized)
                 processed_features.append(processed_feature)
             else:
-                # 其他层直接使用原特征
                 processed_features.append(skip_features[i])
         
         return processed_features
@@ -480,38 +440,31 @@ class DeformableCrossAttentionBlock(nn.Module):
 
 
 class HybridDeformableAttentionBlock(nn.Module):
-    """混合可变形注意力模块：融合MBA的自适应加权与DeformableCrossAttentionModule的强大特征提取"""
     def __init__(self, config, vis):
         super(HybridDeformableAttentionBlock, self).__init__()
         self.hidden_size = config.hidden_size
         self.vis = vis
-        
-        # LayerNorm层
+
         self.attention_norm = LayerNorm(config.hidden_size, eps=1e-6)
         self.attention_normd = LayerNorm(config.hidden_size, eps=1e-6)
         self.ffn_norm = LayerNorm(config.hidden_size, eps=1e-6)
         self.ffn_normd = LayerNorm(config.hidden_size, eps=1e-6)
-        
-        # FFN层
+
         self.ffn = Mlp(config)
         self.ffnd = Mlp(config)
-        
-        # 混合注意力机制
+
         self.hybrid_attn = HybridAttention(config, vis)
 
     def forward(self, x, y):
-        # 保存残差
         hx = x
         hy = y
         
-        # 注意力层
         x = self.attention_norm(x)
         y = self.attention_normd(y)
         x, y, weights = self.hybrid_attn(x, y)
         x = x + hx
         y = y + hy
 
-        # FFN层
         hx = x
         hy = y
         x = self.ffn_norm(x)
@@ -526,7 +479,6 @@ class HybridDeformableAttentionBlock(nn.Module):
     def load_from(self, weights, n_block):
         ROOT = f"Transformer/encoderblock_{n_block}"
         with torch.no_grad():
-            # 加载自注意力部分的权重 (query, key, value, out)
             query_weight = np2th(weights[pjoin(ROOT, ATTENTION_Q, "kernel")]).view(self.hidden_size, self.hidden_size).t()
             key_weight = np2th(weights[pjoin(ROOT, ATTENTION_K, "kernel")]).view(self.hidden_size, self.hidden_size).t()
             value_weight = np2th(weights[pjoin(ROOT, ATTENTION_V, "kernel")]).view(self.hidden_size, self.hidden_size).t()
@@ -555,7 +507,6 @@ class HybridDeformableAttentionBlock(nn.Module):
             self.hybrid_attn.valued.bias.copy_(value_bias)
             self.hybrid_attn.outd.bias.copy_(out_bias)
 
-            # 加载FFN层的权重
             mlp_weight_0 = np2th(weights[pjoin(ROOT, FC_0, "kernel")]).t()
             mlp_weight_1 = np2th(weights[pjoin(ROOT, FC_1, "kernel")]).t()
             mlp_bias_0 = np2th(weights[pjoin(ROOT, FC_0, "bias")]).t()
@@ -571,7 +522,6 @@ class HybridDeformableAttentionBlock(nn.Module):
             self.ffnd.fc1.bias.copy_(mlp_bias_0)
             self.ffnd.fc2.bias.copy_(mlp_bias_1)
 
-            # 加载LayerNorm层的权重
             self.attention_norm.weight.copy_(np2th(weights[pjoin(ROOT, ATTENTION_NORM, "scale")]))
             self.attention_norm.bias.copy_(np2th(weights[pjoin(ROOT, ATTENTION_NORM, "bias")]))
             self.attention_normd.weight.copy_(np2th(weights[pjoin(ROOT, ATTENTION_NORM, "scale")]))
@@ -583,7 +533,6 @@ class HybridDeformableAttentionBlock(nn.Module):
 
 
 class HybridAttention(nn.Module):
-    """混合注意力：结合自注意力、可变形跨注意力和MBA的自适应加权机制"""
     def __init__(self, config, vis):
         super(HybridAttention, self).__init__()
         self.vis = vis
@@ -591,7 +540,6 @@ class HybridAttention(nn.Module):
         self.attention_head_size = int(config.hidden_size / self.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        # 自注意力分支的Q、K、V投影
         self.query = Linear(config.hidden_size, self.all_head_size)
         self.key = Linear(config.hidden_size, self.all_head_size)
         self.value = Linear(config.hidden_size, self.all_head_size)
@@ -599,17 +547,14 @@ class HybridAttention(nn.Module):
         self.keyd = Linear(config.hidden_size, self.all_head_size)
         self.valued = Linear(config.hidden_size, self.all_head_size)
 
-        # 可变形跨注意力分支
         self.deformable_ca = DeformableCrossAttentionModule(
             inc=config.hidden_size, 
             outc=config.hidden_size
         )
 
-        # 输出投影
         self.out = Linear(config.hidden_size, config.hidden_size)
         self.outd = Linear(config.hidden_size, config.hidden_size)
-        
-        # 动态加权门控参数
+
         self.gate_x = nn.Parameter(torch.zeros(1))
         self.gate_y = nn.Parameter(torch.zeros(1))
 
@@ -626,8 +571,6 @@ class HybridAttention(nn.Module):
         B, N, C = hidden_statesx.shape
         H = W = int(math.sqrt(N))
         
-        # === 自注意力分支 ===
-        # x的自注意力
         mixed_query_layer = self.query(hidden_statesx)
         mixed_key_layer = self.key(hidden_statesx)
         mixed_value_layer = self.value(hidden_statesx)
@@ -649,7 +592,6 @@ class HybridAttention(nn.Module):
         attention_sx = self.out(context_layer)
         attention_sx = self.proj_dropout(attention_sx)
 
-        # y的自注意力
         mixed_queryd_layer = self.queryd(hidden_statesy)
         mixed_keyd_layer = self.keyd(hidden_statesy)
         mixed_valued_layer = self.valued(hidden_statesy)
@@ -670,20 +612,15 @@ class HybridAttention(nn.Module):
         attention_sy = self.outd(context_layer)
         attention_sy = self.proj_dropout(attention_sy)
 
-        # === 可变形跨注意力分支 ===
-        # 转换为2D格式
         x_2d = hidden_statesx.transpose(1, 2).contiguous().view(B, C, H, W)
         y_2d = hidden_statesy.transpose(1, 2).contiguous().view(B, C, H, W)
-        
-        # x增强：query=x, value=y
+
         x_enhanced_2d = self.deformable_ca(x_2d, y_2d)
         attention_cx = x_enhanced_2d.view(B, C, N).transpose(1, 2)
-        
-        # y增强：query=y, value=x
+
         y_enhanced_2d = self.deformable_ca(y_2d, x_2d)
         attention_cy = y_enhanced_2d.view(B, C, N).transpose(1, 2)
 
-        # === 动态加权融合 ===
         gate_x = torch.sigmoid(self.gate_x)
         gate_y = torch.sigmoid(self.gate_y)
         attention_x = gate_x * attention_sx + (1 - gate_x) * attention_cx
@@ -840,19 +777,15 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.vis = vis
         
-        # 原始架构：3SA + 6MBA + 3SA
-        # 前3层：纯自注意力
         self.layer = nn.ModuleList()
         for i in range(3):
             layer = Block(config, vis, mode='sa')
             self.layer.append(copy.deepcopy(layer))
-        
-        # 中间6层：HybridDeformableAttentionBlock（融合MBA + DeformableCrossAttentionModule）
+
         for i in range(6):
             layer = HybridDeformableAttentionBlock(config, vis)
             self.layer.append(copy.deepcopy(layer))
-        
-        # 后3层：纯自注意力
+
         for i in range(3):
             layer = Block(config, vis, mode='sa')
             self.layer.append(copy.deepcopy(layer))
@@ -960,20 +893,17 @@ class DecoderCup(nn.Module):
         self.config = config
         head_channels = 512
         self.conv_more = Conv2dReLU(
-            config.hidden_size,  # 恢复为原始的hidden_size
+            config.hidden_size,  
             head_channels,
             kernel_size=3,
             padding=1,
             use_batchnorm=True,
         )
         
-        # 统一使用config中的decoder_channels
-        decoder_channels = config.decoder_channels  # (256, 128, 64, 16)
-        
-        # 添加CM-UNet风格的跳跃连接预处理
+        decoder_channels = config.decoder_channels  
+
         if config.n_skip != 0:
             skip_channels = config.skip_channels
-            # 让MSAA输出与原始跳跃连接通道数匹配
             self.skip_connection_processor = CMUNetSkipConnection(skip_channels, decoder_channels)
         else:
             self.skip_connection_processor = None
@@ -981,7 +911,6 @@ class DecoderCup(nn.Module):
         in_channels = [head_channels] + list(decoder_channels[:-1])
         out_channels = decoder_channels
 
-        # 保持原有的 `skip_channels` 参数不变：
         if self.config.n_skip != 0:
             skip_channels = self.config.skip_channels  # [512, 256, 64, 16]
             for i in range(4-self.config.n_skip):  # re-select the skip channels according to n_skip
@@ -1002,10 +931,8 @@ class DecoderCup(nn.Module):
         x = self.conv_more(x)
         
         if use_basic_skip:
-            # 使用基础跳跃连接
             for i, decoder_block in enumerate(self.blocks):
                 if features is not None and i < len(features):
-                    # 基础跳跃连接：第1, 2, 3个joint mamba输出连接到第2, 3, 4个解码器
                     if i > 0:
                         skip = features[i-1]
                     else:
@@ -1014,7 +941,6 @@ class DecoderCup(nn.Module):
                     skip = None
                 x = decoder_block(x, skip=skip)
         else:
-            # 使用MSAA跳跃链接
             if features is not None and self.skip_connection_processor is not None:
                 features = self.skip_connection_processor(features)
             
@@ -1035,7 +961,7 @@ class VisionTransformer(nn.Module):
         self.num_classes = num_classes
         self.zero_head = zero_head
         self.classifier = config.classifier
-        self.skip_deep_fusion = skip_deep_fusion  # 新增参数：是否跳过深层融合
+        self.skip_deep_fusion = skip_deep_fusion  
         self.use_basic_skip = use_basic_skip
         self.transformer = Transformer(config, img_size, vis)
         self.decoder = DecoderCup(config)
@@ -1048,15 +974,10 @@ class VisionTransformer(nn.Module):
 
     def forward(self, x, y):
         if self.skip_deep_fusion:
-            # 跳过深层融合，只执行浅层融合
             embeddingsx, embeddingsy, features = self.transformer.embeddings(x, y)
-            # 直接使用浅层融合的输出，跳过Encoder（transformer堆叠部分）
-            # 第四层浅层融合SqueezeAndExciteFusionAdd的结果作为UNet解码器的输入
             x = embeddingsx + embeddingsy
         else:
-            # 正常执行完整的融合流程
             x, y, attn_weights, features = self.transformer(x, y)  # (B, n_patch, hidden)
-            # 恢复为简单相加融合
             x = x + y  # (B, n_patch, hidden)
         
         x = self.decoder(x, features, self.use_basic_skip)
@@ -1101,15 +1022,13 @@ class VisionTransformer(nn.Module):
                 self.transformer.embeddings.position_embeddings.copy_(np2th(posemb))
 
             # Encoder whole
-            processed_blocks = set()  # 避免重复处理同一个块
+            processed_blocks = set()  
             for bname, weight in res_weight.items():
                 if bname.startswith('Transformer/encoderblock_'):
-                    # 从键名中提取块编号，例如 "Transformer/encoderblock_0/LayerNorm_0/bias" -> 0
                     parts = bname.split('/')
                     if len(parts) >= 2 and parts[1].startswith('encoderblock_'):
                         blocknum = int(parts[1].split('_')[1])
                         if blocknum < len(self.transformer.encoder.layer) and blocknum not in processed_blocks:
-                            # 直接传递完整的权重字典和块编号
                             self.transformer.encoder.layer[blocknum].load_from(res_weight, blocknum)
                             processed_blocks.add(blocknum)
 
@@ -1144,7 +1063,6 @@ CONFIGS = {
     'testing': configs.get_testing(),
 }
 
-# 便捷函数：创建集成MSAA门控机制的模型
 def create_msaa_model(config_name='R50-ViT-B_16', img_size=224, num_classes=6, skip_deep_fusion=False, use_basic_skip=False):
     """
     创建集成MSAA门控机制的TransUNet模型
