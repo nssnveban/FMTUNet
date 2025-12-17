@@ -38,20 +38,18 @@ config_vit.n_skip = 3
 config_vit.patches.grid = (int(256 / 16), int(256 / 16))
 
 
-# 使用MSAA模型：启用MSAA门控机制，禁用深层融合
 net = create_msaa_model(
     config_name='R50-ViT-B_16',
     img_size=256,
     num_classes=6,
-    skip_deep_fusion=False,  # 不禁用深层融合
-    use_basic_skip=False  # True: 使用基础跳跃连接, False: 使用MSAA跳跃连接
+    skip_deep_fusion=False,  
+    use_basic_skip=False  
 ).cuda()
 
 
-# 加载预训练权重
 net.load_from(weights=np.load(config_vit.pretrained_path))
 print("Pre-trained weights loading completed")
-# 统计模型参数
+
 params = 0
 for name, param in net.named_parameters():
     params += param.nelement()
@@ -140,39 +138,34 @@ def train(net, optimizer, epochs, scheduler=None, weights=WEIGHTS, save_epoch=1)
     #criterion = nn.NLLLoss2d(weight=weights)
     criterion = nn.CrossEntropyLoss(weight=weights)    
     acc_best = 0.0
-    log_data = [] # 初始化日志列表
+    log_data = [] 
     batch_count = 0
 
     for e in range(1, epochs + 1):
         net.train()
         epoch_losses = []
         
-        # 训练阶段
+
         for batch_idx, (data, dsm, target) in enumerate(train_loader):
             data, dsm, target = data.to(device), dsm.to(device), target.to(device)
             
             optimizer.zero_grad()
-            output = net(data, dsm)  # 现在output是一个字典
+            output = net(data, dsm) 
             
-            # 提取logits和features
             logits = output['logits'] if isinstance(output, dict) else output
             features = output.get('features') if isinstance(output, dict) else None
             
-            # 使用标准CrossEntropyLoss
             loss = criterion(logits, target)
             
             loss.backward()
-            # 添加梯度裁剪
+
             torch.nn.utils.clip_grad_norm_(net.parameters(), max_norm=1.0)
             optimizer.step()
 
-            # 记录损失
             epoch_losses.append(loss.item())
             batch_count += 1
             
-            # 打印训练进度
             if batch_idx % 100 == 0:
-                # 从字典中提取logits进行预测
                 if isinstance(output, dict):
                     pred = output['logits'].argmax(dim=1).cpu().numpy()
                 else:
@@ -181,7 +174,6 @@ def train(net, optimizer, epochs, scheduler=None, weights=WEIGHTS, save_epoch=1)
                 acc = accuracy(pred, gt)
                 print(f'Epoch {e} [Batch {batch_idx}/{len(train_loader)}] Loss: {loss.item():.4f}, Acc: {acc:.2f}%')
             
-            # 每500个batch验证一次
             if (batch_idx + 1) % 500 == 0:
                 net.eval()
                 metrics = test(net, test_ids, all=False, stride=Stride_Size)
@@ -190,7 +182,6 @@ def train(net, optimizer, epochs, scheduler=None, weights=WEIGHTS, save_epoch=1)
                 print(f'--- Validation at Epoch {e}, Batch {batch_idx+1} ---')
                 print(f"Accuracy: {metrics['accuracy']:.2f}%, Mean F1: {metrics['mean_F1Score']:.4f}, Mean IoU: {metrics['mean_IoU']:.4f}")
 
-                # 记录日志
                 log_entry = {
                     'epoch': e,
                     'batch': batch_idx + 1,
@@ -202,18 +193,16 @@ def train(net, optimizer, epochs, scheduler=None, weights=WEIGHTS, save_epoch=1)
                 with open(f'{save_dir}/training_log.json', 'w') as f:
                     json.dump(log_data, f, indent=4)
 
-                if metrics['accuracy'] > acc_best:
+                if metrics['accuracy'] > acc_best: #can switch to mean_IoU
                     torch.save(net.state_dict(), './results_posd/posd_epoch{}_{}'.format(e, metrics['accuracy']))
                     acc_best = metrics['accuracy']
                     print(f"New best accuracy: {acc_best:.2f}%, model saved.")
                 else:
                     print(f"Current accuracy: {metrics['accuracy']:.2f}%, Best: {acc_best:.2f}%")
 
-        # 打印epoch平均损失
         avg_loss = sum(epoch_losses) / len(epoch_losses)
         print(f'Epoch {e} Average Loss: {avg_loss:.4f}')
 
-        # 在每个epoch结束时调用scheduler
         if scheduler is not None:
             scheduler.step()
             print(f'Current learning rate: {scheduler.get_last_lr()[0]:.6f}')
@@ -236,3 +225,4 @@ print('Total Time Cost: ',time_end-time_start)
     #plt.imshow(img) and plt.show()
     #io.imsave('./results/inference_tile{}.png'.format(id_), img)
 #print("done!")
+
