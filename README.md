@@ -39,7 +39,7 @@ To ensure reproducibility, please follow these steps strictly to configure the M
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/[YOUR_USERNAME]/FMTUNet.git
+git clone https://github.com/nssnveban/FMTUNet.git
 cd FMTUNet
 ```
 
