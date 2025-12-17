@@ -1057,7 +1057,7 @@ CONFIGS = {
     'testing': configs.get_testing(),
 }
 
-def create_model(config_name='R50-ViT-B_16', img_size=224, num_classes=6, skip_deep_fusion=False, use_basic_skip=False):
+def create_model(config_name='R50-ViT-B_16', img_size=256, num_classes=6, skip_deep_fusion=False, use_basic_skip=False):
     config = CONFIGS[config_name]
     config.n_classes = num_classes
     
