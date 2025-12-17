@@ -14,9 +14,9 @@ It reconstructs the multi-modal interaction paradigm by synergizing:
 1.  **Synergistic Mamba Fusion (SMF):** Exploits the linear-complexity selective scan of Mamba for dynamic, long-range feature alignment between Optical and DSM data.
 2.  **Global Modeling Module (GMM):** Utilizes **Hybrid Deformable Attention (HDA)**. While computationally intensive, this mechanism is critical for capturing the irregular geometries (e.g., distorted building footprints) that standard fixed-grid attention misses.
 
-**Performance (mIoU):**
-*   **ISPRS Vaihingen:** 84.31% 
-*   **ISPRS Potsdam:** 86.32% 
+**Performance Highlights:**
+*   **ISPRS Vaihingen:** 92.43% OA | 84.31% mIoU 
+*   **ISPRS Potsdam:** 91.41% OA | 86.32% mIoU 
 
 ---
 
