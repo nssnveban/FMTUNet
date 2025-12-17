@@ -71,7 +71,7 @@ pip install mamba-ssm==2.2.2
 
 We use the **ISPRS 2D Semantic Labeling Challenge** datasets (Vaihingen & Potsdam). Due to license restrictions, we cannot distribute the data directly.
 
-1.  Request the data from the [ISPRS Official Website](https://www.isprs.org/education/benchmarks/UrbanSemLab/default.aspx).
+1.  Request the data from the [ISPRS Official Website](https://www.isprs.org/education/benchmarks/UrbanSemLab/default.aspx), or can be downloaded [here](https://github.com/open-mmlab/mmsegmentation/blob/main/docs/en/user_guides/2_dataset_prepare.md#prepare-datasets)
 2.  Organize the data as follows:
 
 ```text
