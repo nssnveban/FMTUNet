@@ -79,13 +79,13 @@ python train.py
 
 Note: The training parameters (e.g., base_lr, epochs) are defined directly within train.py. Please modify the script to adjust these hyperparameters according to your hardware capabilities.
 
-### 🔧 Customizing the Optimization Metric
+### Customizing the Optimization Metric
 By default, the script saves the model checkpoint that achieves the highest Overall Accuracy (OA) during validation.
 
 If you prefer to optimize for Mean Intersection over Union (mIoU), you can modify the train function in train.py (around line 197):
 ```python
 # Save model if current accuracy is better than best
-if metrics['accuracy'] > acc_best: # <--- Change this key
+if metrics['accuracy'] > acc_best: # <--- Change this key to "if metrics['mean_Iou'] > miou_best"
     torch.save(net.state_dict(), './results_posd/posd_epoch{}_{}'.format(e, metrics['accuracy']))
     acc_best = metrics['accuracy']
 ```
