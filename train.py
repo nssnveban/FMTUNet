@@ -17,9 +17,9 @@ import torch.nn.init
 from utils import *
 from torch.autograd import Variable
 from IPython.display import clear_output
-from model.vitcross_seg_modeling import VisionTransformer as ViT_seg
-from model.vitcross_seg_modeling import create_model
-from model.vitcross_seg_modeling import CONFIGS as CONFIGS_ViT_seg
+from model.modeling import VisionTransformer as ViT_seg
+from model.modeling import create_model
+from model.modeling import CONFIGS as CONFIGS_seg
 try:
     from urllib.request import URLopener
 except ImportError:
@@ -32,7 +32,7 @@ print("Device :", nvmlDeviceGetName(handle))
 import warnings
 warnings.filterwarnings("ignore")
 
-config_vit = CONFIGS_ViT_seg['R50-ViT-B_16']
+config_vit = CONFIGS_seg['R50-ViT-B_16']
 config_vit.n_classes = 6
 config_vit.n_skip = 3
 config_vit.patches.grid = (int(256 / 16), int(256 / 16))
@@ -225,5 +225,6 @@ print('Total Time Cost: ',time_end-time_start)
     #plt.imshow(img) and plt.show()
     #io.imsave('./results/inference_tile{}.png'.format(id_), img)
 #print("done!")
+
 
 
