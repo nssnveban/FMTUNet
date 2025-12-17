@@ -18,7 +18,7 @@ from utils import *
 from torch.autograd import Variable
 from IPython.display import clear_output
 from model.vitcross_seg_modeling import VisionTransformer as ViT_seg
-from model.vitcross_seg_modeling import create_msaa_model, create_shallow_fusion_model
+from model.vitcross_seg_modeling import create_model
 from model.vitcross_seg_modeling import CONFIGS as CONFIGS_ViT_seg
 try:
     from urllib.request import URLopener
@@ -38,7 +38,7 @@ config_vit.n_skip = 3
 config_vit.patches.grid = (int(256 / 16), int(256 / 16))
 
 
-net = create_msaa_model(
+net = create_model(
     config_name='R50-ViT-B_16',
     img_size=256,
     num_classes=6,
@@ -225,4 +225,5 @@ print('Total Time Cost: ',time_end-time_start)
     #plt.imshow(img) and plt.show()
     #io.imsave('./results/inference_tile{}.png'.format(id_), img)
 #print("done!")
+
 
