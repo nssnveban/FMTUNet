@@ -45,16 +45,19 @@ To ensure reproducibility, please follow these steps strictly to configure the M
 ```bash
 git clone https://github.com/[YOUR_USERNAME]/FMTUNet.git
 cd FMTUNet
+```
 
 ### 2. Create Environment
 ```bash
 conda create -n fmtunet python=3.10
 conda activate fmtunet
+```
 
 ### 3. Install PyTorch (CUDA 11.8)
 Note: We use PyTorch 2.1.1 which is compatible with Mamba 2.2.2.
 ```bash
 pip install torch==2.1.1 torchvision==0.16.1 --index-url https://download.pytorch.org/whl/cu118
+```
 
 ### 4. Install Mamba-SSM & Dependencies
 This step requires nvcc (CUDA compiler) to be available in your path.
@@ -65,7 +68,7 @@ pip install -r requirements.txt
 # Install Mamba components
 pip install causal-conv1d==1.4.0
 pip install mamba-ssm==2.2.2
-
+```
 ---
 
 ## 📂 Data Preparation
@@ -87,7 +90,7 @@ datasets/
     ├── 4_Ortho_RGBIR/                   # RGB/IRRG images
     ├── 5_Labels_for_participants/       # Ground Truth
     └── 5_Labels_for_participants_no_Boundary/
-
+```
 ## 🤝 Acknowledgement
 
 We thank the authors of [ViT](https://github.com/google-research/vision_transformer), [Mamba](https://github.com/state-spaces/mamba), and [FTransUNet](https://github.com/sstary/SSRS) for their open-source contributions. We also acknowledge the ISPRS WG II/4 for providing the Vaihingen and Potsdam benchmark datasets.
