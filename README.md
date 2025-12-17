@@ -85,7 +85,7 @@ By default, the script saves the model checkpoint that achieves the highest Over
 If you prefer to optimize for Mean Intersection over Union (mIoU), you can modify the train function in train.py (around line 197):
 ```python
 # Save model if current accuracy is better than best
-if metrics['accuracy'] > acc_best: # <--- Change this key to "if metrics['mean_Iou'] > miou_best"
+if metrics['accuracy'] > acc_best: # <--- Change this key and the follows 
     torch.save(net.state_dict(), './results_posd/posd_epoch{}_{}'.format(e, metrics['accuracy']))
     acc_best = metrics['accuracy']
 ```
