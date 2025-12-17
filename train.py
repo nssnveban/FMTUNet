@@ -138,6 +138,7 @@ def train(net, optimizer, epochs, scheduler=None, weights=WEIGHTS, save_epoch=1)
     #criterion = nn.NLLLoss2d(weight=weights)
     criterion = nn.CrossEntropyLoss(weight=weights)    
     acc_best = 0.0
+    miou_best = 0.0
     log_data = [] 
     batch_count = 0
 
@@ -193,7 +194,7 @@ def train(net, optimizer, epochs, scheduler=None, weights=WEIGHTS, save_epoch=1)
                 with open(f'{save_dir}/training_log.json', 'w') as f:
                     json.dump(log_data, f, indent=4)
 
-                if metrics['accuracy'] > acc_best: #can switch to mean_IoU
+                if metrics['accuracy'] > acc_best: #can switch to "metrics['mean_IoU']" and "miou_best"
                     torch.save(net.state_dict(), './results_posd/posd_epoch{}_{}'.format(e, metrics['accuracy']))
                     acc_best = metrics['accuracy']
                     print(f"New best accuracy: {acc_best:.2f}%, model saved.")
@@ -225,6 +226,7 @@ print('Total Time Cost: ',time_end-time_start)
     #plt.imshow(img) and plt.show()
     #io.imsave('./results/inference_tile{}.png'.format(id_), img)
 #print("done!")
+
 
 
 
