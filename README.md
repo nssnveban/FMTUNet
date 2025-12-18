@@ -69,7 +69,7 @@ pip install mamba-ssm==2.2.2
 
 ## ⚡ Usage
 
-You can get the pre-trained model here: https://console.cloud.google.com/storage/browser/vit_models in the folder: vit_models/imagenet21k/
+You can get the pre-trained model here: https://console.cloud.google.com/storage/browser/vit_models in the folder: vit_models/imagenet21k/R50+ViT-B_16.npz
 
 ### Training & Validation
 
